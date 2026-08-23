@@ -397,6 +397,15 @@
       log('Arena synced from the other fighter: ' + msg.arena + ' — same venue on both halves.', 'ok');
       return;
     }
+    // The broadcast page (re)connected after we went live — offers are fire-once, so send a
+    // fresh one or a late/reloaded broadcast would never see this feed.
+    if (msg.type === 'broadcast-ready') {
+      if (outputVideoTrack) {
+        log('Broadcast page (re)connected — re-offering our feed.', 'ok');
+        publishToBroadcast(outputVideoTrack).catch((err) => log('Broadcast publish failed: ' + err.message, 'err'));
+      }
+      return;
+    }
     if (msg.fighterId !== fighter || !pc) return;
     if (msg.type === 'answer') await pc.setRemoteDescription(msg.sdp);
     if (msg.type === 'ice' && msg.from === 'broadcast') await pc.addIceCandidate(msg.candidate).catch(() => {});
@@ -408,11 +417,18 @@
     const outStream = new MediaStream(
       morphedAudioTrack ? [videoTrack, morphedAudioTrack] : [videoTrack]
     );
-    pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-    for (const track of outStream.getTracks()) pc.addTrack(track, outStream);
-    pc.onicecandidate = (e) => {
+    if (pc) pc.close(); // re-offer replaces any previous connection
+    const newPc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    pc = newPc;
+    for (const track of outStream.getTracks()) newPc.addTrack(track, outStream);
+    newPc.onicecandidate = (e) => {
       if (e.candidate) relayWs.send(JSON.stringify({ type: 'ice', fighterId: fighter, from: 'fighter', candidate: e.candidate }));
     };
+    // Diagnostic: "connected" = the broadcast is receiving us; stuck on "checking" or ending
+    // in "failed" means the network blocks peer-to-peer (guest WiFi isolation).
+    newPc.oniceconnectionstatechange = () =>
+      log('Broadcast link: ' + newPc.iceConnectionState,
+          newPc.iceConnectionState === 'failed' ? 'err' : (newPc.iceConnectionState === 'connected' ? 'ok' : undefined));
     await relayReady;
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);

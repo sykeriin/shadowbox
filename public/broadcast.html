@@ -210,6 +210,11 @@
     pc.onicecandidate = (e) => {
       if (e.candidate) relayWs.send(JSON.stringify({ type: 'ice', fighterId, from: 'broadcast', candidate: e.candidate }));
     };
+    // Diagnostic: "connected" = media flowing; stuck on "checking" or ending in "failed"
+    // means signaling worked but the network blocks peer-to-peer (guest WiFi isolation).
+    pc.oniceconnectionstatechange = () =>
+      log('Fighter ' + fighterId + ' link: ' + pc.iceConnectionState,
+          pc.iceConnectionState === 'failed' ? 'err' : (pc.iceConnectionState === 'connected' ? 'ok' : undefined));
     pc.ontrack = (e) => {
       const video = document.getElementById('video-' + fighterId);
       if (video) {
@@ -259,11 +264,20 @@
     if (e.key === 'r') sendReset();
   });
 
-  relayWs.addEventListener('open', () => log('Connected to relay, waiting for fighter offers…', 'ok'));
+  // Announce readiness so fighters that are ALREADY live re-offer their feeds — offers are
+  // otherwise sent once at publish time, and a broadcast page that connects late or gets
+  // reloaded mid-fight would wait forever.
+  relayWs.addEventListener('open', () => {
+    log('Connected to relay, waiting for fighter offers…', 'ok');
+    relayWs.send(JSON.stringify({ type: 'broadcast-ready' }));
+  });
   relayWs.addEventListener('error', () => log('Relay connection failed.', 'err'));
   relayWs.addEventListener('message', async (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.type === 'offer') {
+      // A fresh offer means the fighter built a brand-new connection (session restart or a
+      // re-offer for us) — a stale peer must not swallow it.
+      if (peers[msg.fighterId]) { peers[msg.fighterId].close(); delete peers[msg.fighterId]; }
       const pc = peerFor(msg.fighterId);
       await pc.setRemoteDescription(msg.sdp);
       const answer = await pc.createAnswer();
