@@ -35,17 +35,21 @@ Read CLAUDE.md first — its constraints still govern. Run `npm start`; real `RE
   edits compete; if character identity weakens, untoggle → back to reliable single-edit prompt.
 - ● Record button: MediaRecorder on rendered feed + morphed voice → `shadowbox-fighter-X.webm`.
 
-## Remaining tasks (in order)
+## Remaining tasks
 
-1. **Rewrite `public/broadcast.html`** to match: arena-styled chrome (gradient/glow, center VS divider, name
-   plates), keep peers/offer/answer/ice logic, hit buttons + keys 1/2/r + flash animation exactly as now.
-   Received streams may now contain audio: keep `<video>` elements MUTED live (feedback), route audio only into
-   the recording mix.
-2. **Broadcast recording**: 1920×1080 canvas, both feeds contain-fit left/right, rAF draw loop while recording,
-   WebAudio mix of both fighters' audio → MediaRecorder(canvas.captureStream(30) + mix) → `shadowbox-broadcast.webm`.
-3. **Verify** (start server, load pages, check console, then STOP the server — standing user preference: server
-   runs only during active testing, credits).
-4. **Commit + push.**
+None — the broadcast-page batch is done:
+
+1. ✅ `public/broadcast.html` rewritten: arena chrome (gradient/glow backdrop, VS divider, per-fighter name
+   plates + live dots), relay/offer/answer/ice + hit cues (buttons, keys 1/2/r, flash) kept as-is, both
+   `<video>`s now MUTED (fighter streams can carry robot-voice audio; it goes only into recordings).
+2. ✅ Broadcast recording: offscreen 1920×1080 canvas, both feeds contain-fit left/right, rAF loop while
+   recording, WebAudio mix of both fighters' audio → MediaRecorder(canvas.captureStream(30) + mix)
+   → `shadowbox-broadcast.webm`.
+3. ✅ Relay bug found + fixed during verification: `server/index.js` flooded with `client.send(data)`, which
+   re-sends TEXT frames as BINARY — browsers got Blobs and every `JSON.parse(ev.data)` threw, killing all
+   signaling and hit cues. Fixed by forwarding with `{ binary: isBinary }`. Verified with a round-trip test.
+4. ✅ Reference gallery: `GET /references` lists images in `public/`; the fighter page shows them as clickable
+   thumbnails next to the drop zone (still one reference per session, applied on next Start).
 
 ## Explicitly declined / out of scope (don't re-open without the user overriding CLAUDE.md)
 

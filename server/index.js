@@ -60,6 +60,14 @@ app.post('/token', async (req, res) => {
   }
 });
 
+// Reference gallery: every image already sitting in public/ is pickable on the fighter page.
+app.get('/references', (req, res) => {
+  const files = fs
+    .readdirSync(path.join(__dirname, '../public'))
+    .filter((f) => /\.(png|jpe?g|webp)$/i.test(f));
+  res.json(files);
+});
+
 // LAN IPv4 addresses, used both for the cert's altNames and for printing usable URLs.
 function lanAddresses() {
   return Object.values(os.networkInterfaces())
@@ -132,9 +140,12 @@ try {
 // sets, so signalling would never cross and the broadcast page would only ever see one feed.
 const wss = new WebSocketServer({ noServer: true });
 wss.on('connection', (ws) => {
-  ws.on('message', (data) => {
+  // Forward with the original frame type: send(Buffer) alone re-sends a TEXT frame as
+  // BINARY, and browser clients then get a Blob whose JSON.parse throws — every relay
+  // message (signaling and hit cues) silently dies at the recipient.
+  ws.on('message', (data, isBinary) => {
     for (const client of wss.clients) {
-      if (client !== ws && client.readyState === client.OPEN) client.send(data);
+      if (client !== ws && client.readyState === client.OPEN) client.send(data, { binary: isBinary });
     }
   });
 });
