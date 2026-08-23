@@ -341,8 +341,14 @@
 
     const canvasStream = canvas.captureStream(30);
     const tracks = [...canvasStream.getVideoTracks(), ...mixDest.stream.getAudioTracks()];
-    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-      ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+    // Prefer MP4 (H.264+AAC — plays everywhere, shares anywhere); webm is the fallback for
+    // browsers whose MediaRecorder can't mux MP4.
+    const [mime, ext] = [
+      ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'mp4'],
+      ['video/mp4', 'mp4'],
+      ['video/webm;codecs=vp9,opus', 'webm'],
+      ['video/webm', 'webm'],
+    ].find(([m]) => MediaRecorder.isTypeSupported(m));
     const chunks = [];
     recorder = new MediaRecorder(new MediaStream(tracks), { mimeType: mime });
     recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
@@ -350,15 +356,15 @@
       cancelAnimationFrame(rafId);
       audioCtx.close().catch(() => {});
       audioCtx = null;
-      const url = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' }));
+      const url = URL.createObjectURL(new Blob(chunks, { type: mime.split(';')[0] }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'shadowbox-broadcast.webm';
+      a.download = 'shadowbox-broadcast.' + ext;
       a.click();
       URL.revokeObjectURL(url);
       recordBtn.textContent = '● Record broadcast';
       recordBtn.classList.remove('rec');
-      log('Broadcast recording saved (shadowbox-broadcast.webm).', 'ok');
+      log('Broadcast recording saved (shadowbox-broadcast.' + ext + ').', 'ok');
     };
 
     (function loop() {

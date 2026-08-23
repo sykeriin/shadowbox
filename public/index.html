@@ -618,28 +618,34 @@
     }
   });
 
-  // Local recording of the rendered feed (+ morphed voice), downloadable as WebM. This is a
-  // browser-side MediaRecorder — X2's own clip API produces video with no audio, and the
-  // voice morph only exists locally, so recording locally is the only way voice gets in.
+  // Local recording of the rendered feed (+ morphed voice). This is a browser-side
+  // MediaRecorder — X2's own clip API produces video with no audio, and the voice morph
+  // only exists locally, so recording locally is the only way voice gets in. MP4
+  // (H.264+AAC) preferred for shareability; webm is the fallback for browsers whose
+  // MediaRecorder can't mux MP4.
   recordBtn.addEventListener('click', () => {
     if (recorder && recorder.state !== 'inactive') { recorder.stop(); return; }
     if (!outputVideoTrack) { log('Nothing to record yet.', 'err'); return; }
     const tracks = morphedAudioTrack ? [outputVideoTrack, morphedAudioTrack] : [outputVideoTrack];
-    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-      ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+    const [mime, ext] = [
+      ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'mp4'],
+      ['video/mp4', 'mp4'],
+      ['video/webm;codecs=vp9,opus', 'webm'],
+      ['video/webm', 'webm'],
+    ].find(([m]) => MediaRecorder.isTypeSupported(m));
     const chunks = [];
     recorder = new MediaRecorder(new MediaStream(tracks), { mimeType: mime });
     recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     recorder.onstop = () => {
-      const url = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' }));
+      const url = URL.createObjectURL(new Blob(chunks, { type: mime.split(';')[0] }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'shadowbox-fighter-' + fighter + '.webm';
+      a.download = 'shadowbox-fighter-' + fighter + '.' + ext;
       a.click();
       URL.revokeObjectURL(url);
       recordBtn.textContent = '● Record';
       recordBtn.classList.remove('rec');
-      log('Recording saved (shadowbox-fighter-' + fighter + '.webm).', 'ok');
+      log('Recording saved (shadowbox-fighter-' + fighter + '.' + ext + ').', 'ok');
     };
     recorder.start();
     recordBtn.textContent = '■ Save recording';
