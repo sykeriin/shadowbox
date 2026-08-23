@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shadowbox — Broadcast</title>
+<style>
+  :root { --bg:#0d0f12; --fg:#e8e6e0; --dim:#7c7f86; --line:#22262c; --hot:#4ade80; --bad:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .broadcast { display:grid; grid-template-columns:1fr 1fr; gap:0; height:100vh; }
+  figure { margin:0; position:relative; background:#000; }
+  video { width:100%; height:100%; object-fit:cover; display:block; }
+  figcaption { position:absolute; top:12px; left:12px; color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.08em; background:rgba(0,0,0,.5); padding:4px 8px; }
+  figcaption.live { color:var(--hot); }
+  #log { position:fixed; bottom:0; left:0; right:0; white-space:pre-wrap; color:var(--dim); font-size:11px; max-height:120px; overflow-y:auto; background:rgba(0,0,0,.7); padding:8px 12px; }
+  #log .ok { color:var(--hot); }
+  #log .err { color:var(--bad); }
+  #controls { position:fixed; top:0; left:0; right:0; display:flex; gap:8px; justify-content:center; padding:10px; background:rgba(0,0,0,.5); font-size:12px; }
+  #controls button { font:inherit; background:rgba(0,0,0,.6); color:var(--fg); border:1px solid var(--line); padding:8px 14px; cursor:pointer; }
+  #controls button:hover { border-color:var(--hot); color:var(--hot); }
+  #controls kbd { color:var(--dim); }
+  /* Cosmetic hit sting only — fires instantly on the manual cue, purely visual, never touches
+     X2's prompt/state. The real staggered look still depends on the fighter physically
+     reacting; this is just an immediate broadcast-graphic-style flash so the moment reads
+     before that ~1s settling delay lands. */
+  figure.hit-flash { animation: hitFlash 300ms ease-out; }
+  @keyframes hitFlash {
+    0%   { box-shadow: inset 0 0 0 9999px rgba(248,113,113,.55); }
+    100% { box-shadow: inset 0 0 0 9999px rgba(248,113,113,0); }
+  }
+</style>
+</head>
+<body>
+<div id="controls">
+  <button id="hit-A">A landed a hit → B staggers <kbd>(1)</kbd></button>
+  <button id="hit-B">B landed a hit → A staggers <kbd>(2)</kbd></button>
+  <button id="reset">Reset both to standing <kbd>(r)</kbd></button>
+</div>
+<div class="broadcast">
+  <figure>
+    <video id="video-A" autoplay playsinline></video>
+    <figcaption id="cap-A">Fighter A — waiting…</figcaption>
+  </figure>
+  <figure>
+    <video id="video-B" autoplay playsinline></video>
+    <figcaption id="cap-B">Fighter B — waiting…</figcaption>
+  </figure>
+</div>
+<div id="log"></div>
+
+<script type="module">
+  const logEl = document.getElementById('log');
+  function log(msg, cls) {
+    const line = document.createElement('div');
+    if (cls) line.className = cls;
+    line.textContent = msg;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log(msg);
+  }
+
+  // Two independent RTCPeerConnections, one per fighterId — this is the "composite after
+  // generation, not before" from CLAUDE.md constraint 3: each feed is a finished X2 output
+  // received separately and just placed in its own half of the screen via CSS grid. No
+  // frame-level merging happens anywhere.
+  const peers = {}; // fighterId -> RTCPeerConnection
+  const relayWs = new WebSocket(location.origin.replace(/^http/, 'ws') + '/relay');
+
+  function peerFor(fighterId) {
+    if (peers[fighterId]) return peers[fighterId];
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    pc.onicecandidate = (e) => {
+      if (e.candidate) relayWs.send(JSON.stringify({ type: 'ice', fighterId, from: 'broadcast', candidate: e.candidate }));
+    };
+    pc.ontrack = (e) => {
+      const video = document.getElementById('video-' + fighterId);
+      const cap = document.getElementById('cap-' + fighterId);
+      if (video) {
+        video.srcObject = e.streams[0];
+        if (cap) { cap.textContent = 'Fighter ' + fighterId + ' — live'; cap.classList.add('live'); }
+        log('Fighter ' + fighterId + ' track live', 'ok');
+      } else {
+        log('Got a feed for unknown fighterId "' + fighterId + '" — only A and B have a slot on screen.', 'err');
+      }
+    };
+    peers[fighterId] = pc;
+    return pc;
+  }
+
+  // Manual hit cue (CLAUDE.md constraint #2 — keypress/call only, never automatic pose
+  // detection). This does two things on trigger: (1) an instant cosmetic flash here, purely
+  // visual, so the moment reads on screen right away; (2) sends {type:'hit', target} over the
+  // relay so the TARGETED fighter's own page updates its X2 prompt — but that only actually
+  // looks staggered once that fighter physically reacts on their own camera (constraint #7).
+  function flash(fighterId) {
+    const fig = document.getElementById('video-' + fighterId)?.closest('figure');
+    if (!fig) return;
+    fig.classList.remove('hit-flash');
+    // restart the animation even if triggered twice in a row
+    void fig.offsetWidth;
+    fig.classList.add('hit-flash');
+  }
+  function sendHit(target) {
+    flash(target);
+    relayWs.send(JSON.stringify({ type: 'hit', target }));
+    log('Hit cue sent: ' + target + ' staggers.', 'ok');
+  }
+  function sendReset() {
+    relayWs.send(JSON.stringify({ type: 'reset' }));
+    log('Reset cue sent to both fighters.', 'ok');
+  }
+  document.getElementById('hit-A').addEventListener('click', () => sendHit('B')); // A landed it, B reacts
+  document.getElementById('hit-B').addEventListener('click', () => sendHit('A')); // B landed it, A reacts
+  document.getElementById('reset').addEventListener('click', sendReset);
+  window.addEventListener('keydown', (e) => {
+    if (e.key === '1') sendHit('B');
+    if (e.key === '2') sendHit('A');
+    if (e.key === 'r') sendReset();
+  });
+
+  relayWs.addEventListener('open', () => log('Connected to relay, waiting for fighter offers…', 'ok'));
+  relayWs.addEventListener('error', () => log('Relay connection failed.', 'err'));
+  relayWs.addEventListener('message', async (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'offer') {
+      const pc = peerFor(msg.fighterId);
+      await pc.setRemoteDescription(msg.sdp);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      relayWs.send(JSON.stringify({ type: 'answer', fighterId: msg.fighterId, sdp: pc.localDescription }));
+      log('Answered offer from Fighter ' + msg.fighterId, 'ok');
+    } else if (msg.type === 'ice' && msg.from === 'fighter') {
+      const pc = peers[msg.fighterId];
+      if (pc) await pc.addIceCandidate(msg.candidate).catch(() => {});
+    }
+  });
+</script>
+</body>
+</html>

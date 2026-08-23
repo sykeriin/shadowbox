@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shadowbox — Hour 1 plumbing test</title>
+<title>Shadowbox — Fighter</title>
 <style>
   :root { --bg:#0d0f12; --fg:#e8e6e0; --dim:#7c7f86; --line:#22262c; --hot:#4ade80; --bad:#f87171; }
   * { box-sizing:border-box; }
@@ -16,6 +16,8 @@
   button { font:inherit; background:transparent; color:var(--fg); border:1px solid var(--line); padding:10px 16px; cursor:pointer; width:100%; margin-top:10px; }
   button:hover:not(:disabled) { border-color:var(--hot); color:var(--hot); }
   button:disabled { color:var(--dim); cursor:not-allowed; }
+  label { display:block; color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.05em; margin-top:16px; }
+  select { font:inherit; background:#000; color:var(--fg); border:1px solid var(--line); padding:8px; width:100%; margin-top:6px; }
   #log { white-space:pre-wrap; color:var(--dim); font-size:12px; margin-top:16px; max-height:300px; overflow-y:auto; border-top:1px solid var(--line); padding-top:12px; }
   #log .ok { color:var(--hot); }
   #log .err { color:var(--bad); }
@@ -24,8 +26,13 @@
 </style>
 </head>
 <body>
-<h1>Shadowbox — Hour 1 checkpoint</h1>
-<p class="sub">Prove the round trip: your face goes into Reactor, your face (unmodified) comes back out. No prompt, no reference image yet.</p>
+<h1 id="title">Shadowbox — Hour 3 checkpoint</h1>
+<p class="sub">One independent X2 session per fighter. Open this page once per fighter (add <code>?fighter=A</code> /
+<code>?fighter=B</code> to the URL, or just use different browser tabs/laptops); each instance is fully separate,
+nothing shared. The two output feeds get placed side by side after generation, not before.</p>
+
+<label for="camera">Camera</label>
+<select id="camera"><option value="">Default camera</option></select>
 
 <div class="wrap">
   <figure>
@@ -55,68 +62,264 @@
   const localVideo = document.getElementById('local');
   const remoteVideo = document.getElementById('remote');
   const startBtn = document.getElementById('start');
+  const cameraSelect = document.getElementById('camera');
 
-  // ---------------------------------------------------------------------
-  // UNVERIFIED SDK SURFACE — read this before debugging anything below.
-  //
-  // docs.reactor.inc/model-api-reference/x2 describes this shape:
-  //   import { X2Model } from "@reactor-models/x2"
-  //   const x2 = new X2Model()
-  //   await x2.connect(jwt)
-  //   await x2.publishSource(track)
-  //   x2.onMainVideo((track, stream) => { ... })
-  //   await x2.setPrompt({ prompt: "..." })
-  //
-  // A separate, more generic Reactor overview page described a *different* shape
-  // (@reactor-team/js-sdk, reactor.publishTrack, a "trackReceived" event). These two
-  // don't agree. The X2-specific page should be authoritative for X2 — but confirm
-  // against the live page before spending real time debugging this file. If the
-  // import below 404s or the methods don't exist, that mismatch is why.
-  //
-  // esm.sh is used here to get a browser-importable build without setting up a
-  // bundler — untested against this specific package. If it fails to resolve,
-  // the fallback is `npm install @reactor-models/x2` + a real bundler (Vite).
-  // ---------------------------------------------------------------------
-  let X2Model;
-  try {
-    ({ X2Model } = await import('https://esm.sh/@reactor-models/x2'));
-    log('SDK import ok (unverified against live docs — see comment in source)', 'ok');
-    startBtn.disabled = false;
-    startBtn.textContent = 'Start';
-  } catch (err) {
-    log('SDK import failed: ' + err.message, 'err');
-    log('Check the exact package name / whether a browser build exists at https://docs.reactor.inc/model-api-reference/x2', 'err');
-    startBtn.textContent = 'SDK unavailable — see log';
+  // Prompts follow https://docs.reactor.inc/model-api-reference/x2/prompt-guide.md :
+  //  - Line 1 is the verbatim "stable capability prefix" for character replacement. Without a
+  //    prefix X2 runs in free-prompting mode, which is scoped to "effects, objects,
+  //    backgrounds" — that's why an un-prefixed prompt repainted the whole frame instead of
+  //    swapping the person.
+  //  - The character is NOT described in text: REFERENCE supplies appearance, PROMPT supplies
+  //    the transformation. The guide explicitly warns against "redescribing details already
+  //    visible in the reference" — doing so competes with the reference and drives artifacts.
+  //  - The target is named spatially ("the person in the centre"), per "Wrong person changes ->
+  //    name position"; pronouns are unreliable when other people are in frame.
+  //  - Ends with one preservation boundary (background / other people / camera), per "Too much
+  //    of the frame changes -> narrower prefix + one preservation boundary".
+  //  - Simplified Chinese throughout, which the guide recommends for maximum consistency.
+  // Both states are COMPLETE prompts: the guide says to send the whole replacement
+  // instruction on a state change, never a relative follow-up like "now stagger".
+  const PROMPT_STANDING =
+    '视频中角色替换成参考图中角色\n' +
+    '仅将画面中央的人物替换为参考图角色。保留该人物的表情、视线、姿势和手部动作；背景、其他人物和镜头保持不变。';
+  const PROMPT_STAGGERED =
+    '视频中角色替换成参考图中角色\n' +
+    '仅将画面中央的人物替换为参考图角色。该角色刚被击中，正踉跄后退、失去平衡、防御松散，动作与画面中人物的真实动作完全一致；背景、其他人物和镜头保持不变。';
+
+  // Fighter id is cosmetic for the heading, but functionally required to key this session's
+  // feed on the broadcast page — defaults to A so a bare URL still works, but the SECOND
+  // fighter's tab/laptop must be opened with ?fighter=B or its feed collides with A's.
+  const fighter = new URLSearchParams(location.search).get('fighter') || 'A';
+  document.title = 'Shadowbox — Fighter ' + fighter;
+  document.getElementById('title').textContent = 'Shadowbox — Fighter ' + fighter;
+  if (!new URLSearchParams(location.search).get('fighter')) {
+    log('No ?fighter= in URL — defaulting to Fighter A. Open the second session as ?fighter=B.', 'err');
+  }
+
+  // Fixed per-fighter reference image — players don't pick their own, and it's not shown on
+  // screen. Files live in public/ (robot1.png / robot2.png), served statically by
+  // server/index.js.
+  const REFERENCE_IMAGE = { A: '/robot1.png', B: '/robot2.png' }[fighter];
+  if (!REFERENCE_IMAGE) log('No reference image mapped for fighter "' + fighter + '" — only A and B have one.', 'err');
+
+  // Push this session's rendered main_video out to the broadcast page over WebRTC, signaled
+  // through the server's flood relay at /relay (see server/index.js). Only runs once
+  // main_video actually shows up — see onMainVideo below.
+  let relayWs;
+  let pc;
+  let x2Instance; // set once the real X2 branch connects; stays undefined in mock mode
+  let currentStream; // webcam MediaStream, so Stop can release the camera
+
+  // Hour 4: the hit cue only ever changes the PROMPT — never a fall/stagger the fighter
+  // didn't actually perform (CLAUDE.md constraint #7). The cue is a signal to react, not a
+  // command X2 obeys on its own; if the fighter doesn't move, this text alone won't fake it.
+  async function applyHitState(staggered) {
+    if (!x2Instance) {
+      log('Hit cue received (mock mode — no real X2 session, prompt not sent).', 'err');
+      return;
+    }
+    await x2Instance.setPrompt({ prompt: staggered ? PROMPT_STAGGERED : PROMPT_STANDING });
+    log((staggered ? 'Staggered' : 'Recovery') + ' prompt sent — react physically now, ~1s settling delay.', 'ok');
+  }
+
+  function publishToBroadcast(remoteStream) {
+    relayWs = new WebSocket(location.origin.replace(/^http/, 'ws') + '/relay');
+    pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    for (const track of remoteStream.getTracks()) pc.addTrack(track, remoteStream);
+    pc.onicecandidate = (e) => {
+      if (e.candidate) relayWs.send(JSON.stringify({ type: 'ice', fighterId: fighter, from: 'fighter', candidate: e.candidate }));
+    };
+    relayWs.addEventListener('open', async () => {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      relayWs.send(JSON.stringify({ type: 'offer', fighterId: fighter, sdp: pc.localDescription }));
+      log('Broadcast offer sent for Fighter ' + fighter + ' — open /broadcast.html to see both feeds.', 'ok');
+    });
+    relayWs.addEventListener('message', async (ev) => {
+      const msg = JSON.parse(ev.data);
+      // Hit/reset cues target one fighter by id; WebRTC signaling messages carry their own
+      // fighterId too — both share this listener since it's the same flood relay.
+      if (msg.type === 'hit' && msg.target === fighter) return applyHitState(true);
+      if (msg.type === 'reset' && (!msg.target || msg.target === fighter)) return applyHitState(false);
+      if (msg.fighterId !== fighter) return; // signaling message for the other fighter — ignore
+      if (msg.type === 'answer') await pc.setRemoteDescription(msg.sdp);
+      if (msg.type === 'ice' && msg.from === 'broadcast') await pc.addIceCandidate(msg.candidate).catch(() => {});
+    });
+    relayWs.addEventListener('error', () => log('Broadcast relay connection failed (non-fatal — local view still works).', 'err'));
+  }
+
+  // Populate the camera list so two sessions on the same laptop can be pointed at two
+  // different physical cameras during dev/testing. Labels are blank until permission has
+  // been granted at least once; re-open this dropdown after the first Start click if empty.
+  async function refreshCameraList() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d => d.kind === 'videoinput');
+    cameraSelect.innerHTML = '<option value="">Default camera</option>' +
+      cams.map((d, i) => `<option value="${d.deviceId}">${d.label || 'Camera ' + (i + 1)}</option>`).join('');
+  }
+  refreshCameraList().catch(() => {});
+
+  // No REACTOR_API_KEY on the server yet → /token hands back { mock: true } and we never
+  // touch the X2 SDK at all, so webcam + server + UI wiring can be verified at zero credit
+  // cost. The SDK is only imported below, inside the real branch, once a live JWT shows up.
+  startBtn.disabled = false;
+  startBtn.textContent = 'Start';
+  let running = false;
+
+  async function startSession() {
+    log('Requesting webcam…');
+    const deviceId = cameraSelect.value;
+    const videoConstraint = deviceId ? { deviceId: { exact: deviceId } } : true;
+    const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint, audio: false });
+    currentStream = stream;
+    localVideo.srcObject = stream;
+    await refreshCameraList().catch(() => {}); // labels are available now that permission was granted
+
+    log('Requesting JWT from /token…');
+    const tokenRes = await fetch('/token', { method: 'POST' });
+    const tokenBody = await tokenRes.json();
+    if (!tokenRes.ok) throw new Error('Token exchange failed: ' + JSON.stringify(tokenBody));
+
+    if (tokenBody.mock) {
+      log('MOCK MODE — no REACTOR_API_KEY set, no Reactor call made, no credits spent.', 'ok');
+      log('Looping local webcam straight to the "remote" pane to verify wiring only.', 'ok');
+      remoteVideo.srcObject = stream;
+      if (REFERENCE_IMAGE) log('(Would use reference ' + REFERENCE_IMAGE + ' — not uploaded, mock mode)', 'ok');
+      publishToBroadcast(stream); // lets you test the broadcast page/relay with zero credits
+      log('Mock round-trip complete. Add REACTOR_API_KEY to .env for the real X2 test.', 'ok');
+      return;
+    }
+
+    log('Got real JWT', 'ok');
+
+    // SDK surface confirmed 2026-08-23 against https://docs.reactor.inc/model-api-reference/x2
+    // and its /tutorial page (plain-JS X2Model class, not the React X2Provider wrapper):
+    //   connect / publishSource / onMainVideo / setPrompt / disconnect
+    //   uploadFile(file) -> ref; setReferenceImage({ reference_image: ref })
+    // Loaded from the locally installed npm package (@reactor-models/x2), bundled for the
+    // browser by `npm run build:sdk` into vendor/x2.mjs — NOT from a CDN. Re-run that script
+    // after upgrading the SDK.
+    log('Importing X2 SDK…');
+    const { X2Model } = await import('./vendor/x2.mjs');
+    log('SDK import ok', 'ok');
+
+    log('Connecting to X2…');
+    const x2 = new X2Model();
+    x2Instance = x2; // exposes it to the hit-cue relay listener above, and to Stop below
+
+    // Subscribe BEFORE connect(). main_video is a recvonly track and ConnectOptions defaults
+    // to sending resume_track for every recvonly track "immediately after the connection is
+    // established" — so it can arrive during connect(). onMainVideo does NOT replay a track
+    // that already landed, and for vanilla JS there's no way to read it after the fact
+    // (getState() returns only {status,lastError}; the `tracks` record is React-store-only).
+    // Registering after connect() silently misses the track and the output pane stays black.
+    x2.onMainVideo((track, remoteStream) => {
+      log('main_video track received', 'ok');
+      remoteVideo.srcObject = remoteStream;
+      remoteVideo.play().catch(() => {}); // autoplay can need a nudge even when muted
+      publishToBroadcast(remoteStream);
+    });
+
+    // Surface model-side events (generation_started / generation_stopped / command_error) so
+    // a session that connects but never generates is diagnosable instead of just black.
+    x2.on('runtimeMessage', (msg) => {
+      const type = msg && msg.type;
+      if (type === 'state_update' || type === 'pointer_changed') return; // too chatty
+      try {
+        log('model: ' + JSON.stringify(msg), type === 'command_error' ? 'err' : 'ok');
+      } catch {
+        log('model: ' + type);
+      }
+    });
+
+    await x2.connect(tokenBody.jwt);
+    log('Connected (status: ' + x2.getStatus() + ')', 'ok');
+
+    // connect() resolving is NOT the same as the transport being usable: the SDK's status
+    // walks disconnected -> connecting -> waiting -> ready, and publishTrack() only works at
+    // "ready" (it calls replaceTrack() on a sender whose transceiver is set up during the
+    // ready handshake). Publishing too early fails with
+    //   [WebRTCTransport] Cannot publish track "source" - not connected
+    // so gate on the status event. Types: ReactorStatus / ReactorEvent "statusChanged" in
+    // @reactor-team/js-sdk index.d.ts.
+    if (x2.getStatus() !== 'ready') {
+      log('Waiting for session to reach "ready"…');
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          x2.off('statusChanged', onStatus);
+          reject(new Error('Timed out waiting for session "ready" (last status: ' + x2.getStatus() + ')'));
+        }, 30000);
+        function onStatus(status) {
+          log('  status: ' + status);
+          if (status === 'ready') {
+            clearTimeout(timer);
+            x2.off('statusChanged', onStatus);
+            resolve();
+          } else if (status === 'disconnected') {
+            clearTimeout(timer);
+            x2.off('statusChanged', onStatus);
+            reject(new Error('Session disconnected before becoming ready'));
+          }
+        }
+        x2.on('statusChanged', onStatus);
+      });
+      log('Session ready', 'ok');
+    }
+
+    log('Publishing webcam as SOURCE…');
+    await x2.publishSource(stream.getVideoTracks()[0]);
+    log('Published.', 'ok');
+
+    if (REFERENCE_IMAGE) {
+      log('Fetching reference image (' + REFERENCE_IMAGE + ')…');
+      const blob = await (await fetch(REFERENCE_IMAGE)).blob();
+      const refFile = new File([blob], REFERENCE_IMAGE.slice(1), { type: blob.type });
+      const ref = await x2.uploadFile(refFile);
+      await x2.setReferenceImage({ reference_image: ref });
+      log('Reference image set', 'ok');
+    } else {
+      log('No reference image mapped for this fighter — generation will follow the prompt text only.', 'err');
+    }
+
+    await x2.setPrompt({ prompt: PROMPT_STANDING });
+    log('Prompt set. Generation begins once frames are flowing — expect ~1s settling delay.', 'ok');
+  }
+
+  // Per CLAUDE.md: X2 bills per session-second including idle time, so Stop has to actually
+  // call disconnect() (confirmed against docs.reactor.inc/concepts/sessions — no-arg
+  // disconnect() terminates immediately and releases all state; disconnect(true) would keep
+  // billing for a 30s recoverable window, which is never what we want here) — not just hide
+  // the video elements.
+  async function stopSession() {
+    if (x2Instance) {
+      log('Disconnecting X2 session (stops billing)…');
+      await x2Instance.disconnect().catch((err) => log('disconnect() failed: ' + err.message, 'err'));
+      x2Instance = null;
+    }
+    if (pc) { pc.close(); pc = null; }
+    if (relayWs) { relayWs.close(); relayWs = null; }
+    if (currentStream) { currentStream.getTracks().forEach((t) => t.stop()); currentStream = null; }
+    localVideo.srcObject = null;
+    remoteVideo.srcObject = null;
+    log('Stopped.', 'ok');
   }
 
   startBtn.addEventListener('click', async () => {
     startBtn.disabled = true;
     try {
-      log('Requesting webcam…');
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      localVideo.srcObject = stream;
-
-      log('Requesting JWT from /token…');
-      const tokenRes = await fetch('/token', { method: 'POST' });
-      const tokenBody = await tokenRes.json();
-      if (!tokenRes.ok) throw new Error('Token exchange failed: ' + JSON.stringify(tokenBody));
-      log('Got JWT', 'ok');
-
-      log('Connecting to X2…');
-      const x2 = new X2Model();
-      await x2.connect(tokenBody.jwt);
-      log('Connected', 'ok');
-
-      x2.onMainVideo((track, remoteStream) => {
-        log('main_video track received', 'ok');
-        remoteVideo.srcObject = remoteStream;
-      });
-
-      log('Publishing webcam as SOURCE (no prompt set — raw round-trip only)…');
-      await x2.publishSource(stream.getVideoTracks()[0]);
-      log('Published. Waiting for main_video…');
+      if (!running) {
+        await startSession();
+        running = true;
+        startBtn.textContent = 'Stop';
+      } else {
+        await stopSession();
+        running = false;
+        startBtn.textContent = 'Start';
+      }
     } catch (err) {
       log('Failed: ' + err.message, 'err');
+      if (!running) await stopSession().catch(() => {}); // release any partially-acquired camera/session
+    } finally {
       startBtn.disabled = false;
     }
   });
