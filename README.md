@@ -86,6 +86,17 @@ One Node server does three small jobs: exchanges the API key for a browser-safe 
 (`POST /token`), serves the pages (HTTP :3000 + self-signed HTTPS :3443 for LAN webcams),
 and runs a three-client WebSocket flood relay for signaling, hit cues, and arena sync.
 
+## Hosting the pages (Netlify)
+
+There's a `netlify.toml` that serves `public/` statically, ports `/token` to a serverless
+function (put `REACTOR_API_KEY` in the site's environment variables), and bakes the image
+gallery into `references.json` at build time. What Netlify **can't** host is the WebSocket
+relay — so signaling, hit cues, and arena sync still need a laptop running `npm start`,
+reachable through a tunnel. Point the hosted pages at it with
+`?relay=wss://<your-tunnel>/relay` (combine with `&fighter=B` etc.).
+
+**Do not deploy publicly until `/token` has auth** — see the warning below.
+
 ## ⚠️ Before you get creative
 
 - `REACTOR_API_KEY` is server-side only and never reaches the browser. But `/token` has
