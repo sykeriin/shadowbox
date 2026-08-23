@@ -291,15 +291,15 @@
   });
 
   // ---- Broadcast recording -------------------------------------------------------------
-  // 1920×1080 canvas, both received feeds contain-fit into their halves, drawn by a rAF loop
-  // that only runs while recording. Audio: both fighters' robot-voice tracks are mixed with
+  // 1920×1080 canvas, both received feeds cover-fit into their halves, drawn by an
+  // audio-clock loop that only runs while recording. Audio: fighters' robot voices are mixed with
   // WebAudio into the recording ONLY — the on-screen <video>s stay muted so nothing plays in
   // the venue. (Chrome quirk: remote WebRTC audio reaches WebAudio only when the stream is
   // attached to a media element — the muted <video>s satisfy that.) This composits two
   // finished output streams AFTER generation, same as the CSS grid — constraint 3 holds.
   const recordBtn = document.getElementById('record');
   const W = 1920, H = 1080, HALF = W / 2;
-  let recorder, audioCtx, mixDest, rafId;
+  let recorder, audioCtx, mixDest, drawDriver;
   const mixedTrackIds = new Set();
 
   function addToRecordingMix(track, fighterId) {
@@ -339,7 +339,9 @@
       for (const track of (streams[fighterId]?.getAudioTracks() || [])) addToRecordingMix(track, fighterId);
     }
 
-    const canvasStream = canvas.captureStream(30);
+    // captureStream(0) = frames only on explicit requestFrame(), from the draw driver below.
+    const canvasStream = canvas.captureStream(0);
+    const canvasTrack = canvasStream.getVideoTracks()[0];
     const tracks = [...canvasStream.getVideoTracks(), ...mixDest.stream.getAudioTracks()];
     // Prefer MP4 (H.264+AAC — plays everywhere, shares anywhere); webm is the fallback for
     // browsers whose MediaRecorder can't mux MP4.
@@ -353,7 +355,7 @@
     recorder = new MediaRecorder(new MediaStream(tracks), { mimeType: mime });
     recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     recorder.onstop = () => {
-      cancelAnimationFrame(rafId);
+      drawDriver.disconnect();
       audioCtx.close().catch(() => {});
       audioCtx = null;
       const url = URL.createObjectURL(new Blob(chunks, { type: mime.split(';')[0] }));
@@ -367,10 +369,13 @@
       log('Broadcast recording saved (shadowbox-broadcast.' + ext + ').', 'ok');
     };
 
-    (function loop() {
-      drawFrame(ctx);
-      rafId = requestAnimationFrame(loop);
-    })();
+    // The compositor is driven by the audio clock, NOT requestAnimationFrame: rAF pauses
+    // entirely while this tab is hidden or covered — recordings froze on a single frame the
+    // moment everyone went off to fight. An AudioContext keeps ticking in background tabs,
+    // so each ~1024-sample buffer (~43/s) draws and force-captures one frame.
+    drawDriver = audioCtx.createScriptProcessor(1024, 1, 1);
+    drawDriver.onaudioprocess = () => { drawFrame(ctx); canvasTrack.requestFrame(); };
+    drawDriver.connect(audioCtx.destination); // outputs silence; connection just keeps it ticking
     recorder.start();
     recordBtn.textContent = '■ Save recording';
     recordBtn.classList.add('rec');

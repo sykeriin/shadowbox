@@ -112,6 +112,10 @@
   @keyframes pulse { 50% { opacity:.55; } }
   .controls .spacer { flex:1; }
   .hint { font-size:11px; color:var(--dim); letter-spacing:.04em; }
+  .hint kbd {
+    font:11px var(--mono); color:var(--fg);
+    border:1px solid var(--line); padding:1px 6px; background:var(--steel);
+  }
 
   /* Full-screen cue so the fighter can't miss the moment they must physically perform the
      reaction (CLAUDE.md constraint 7 — the prompt swap alone renders nothing convincing). */
@@ -151,7 +155,7 @@
   <div class="badge" id="fighterBadge">FIGHTER A</div>
   <div class="status"><div class="dot" id="statusDot"></div><span id="statusText">idle</span></div>
   <div class="spacer"></div>
-  <span class="hint">Open one page per fighter: <code>?fighter=A</code> / <code>?fighter=B</code></span>
+  <span class="hint">Hit cues: <kbd>1</kbd> A lands · <kbd>2</kbd> B lands · <kbd>r</kbd> reset</span>
 </header>
 
 <div class="stage">
@@ -352,6 +356,23 @@
     clearTimeout(cueTimer);
     cueTimer = setTimeout(() => hitCue.classList.remove('show'), 1700);
   }
+
+  // Hit cues callable from the fighter page too — the host often fights AND runs the venue
+  // laptop with the broadcast window buried. Same manual keypress → relay messages as the
+  // broadcast page (CLAUDE.md constraint 2: a human presses a key, nothing automatic). The
+  // flood relay doesn't echo to the sender, so cues that target ourselves apply locally.
+  window.addEventListener('keydown', (e) => {
+    if (e.target && /^(select|input|textarea|button)$/i.test(e.target.tagName)) return;
+    let msg;
+    if (e.key === '1') msg = { type: 'hit', target: 'B' };
+    else if (e.key === '2') msg = { type: 'hit', target: 'A' };
+    else if (e.key === 'r') msg = { type: 'reset' };
+    else return;
+    relayWs.send(JSON.stringify(msg));
+    log((msg.type === 'hit' ? 'Hit cue sent: ' + msg.target + ' staggers.' : 'Reset cue sent to both fighters.'), 'ok');
+    if (msg.type === 'hit' && msg.target === fighter) applyHitState(true).catch(() => {});
+    if (msg.type === 'reset') applyHitState(false).catch(() => {});
+  });
 
   async function applyHitState(staggered) {
     showCue(staggered);
