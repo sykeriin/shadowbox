@@ -1,5 +1,0 @@
-# Netlify serves public/ as a static mirror of the pages only. The backend — /token,
-# /references, and the /relay WebSocket — lives on the Render deployment; the pages
-# detect a *.netlify.app hostname and point themselves at it (see BACKEND in the HTML).
-[build]
-  publish = "public"

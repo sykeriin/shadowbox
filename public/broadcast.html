@@ -201,12 +201,8 @@
   // frame-level merging happens anywhere.
   const peers = {};   // fighterId -> RTCPeerConnection
   const streams = {}; // fighterId -> MediaStream (for the recording compositor)
-  // Static mirrors (Netlify) can't host the WebSocket relay — it lives on the Render
-  // deployment. ?relay=wss://<host>/relay still overrides for tunnels/local setups.
-  const BACKEND = location.hostname.endsWith('.netlify.app')
-    ? 'https://shadowbox-p8bq.onrender.com'
-    : location.origin;
-  const relayWs = new WebSocket(new URLSearchParams(location.search).get('relay') || BACKEND.replace(/^http/, 'ws') + '/relay');
+  // ?relay=wss://<host>/relay overrides the same-origin relay for tunnels/local setups.
+  const relayWs = new WebSocket(new URLSearchParams(location.search).get('relay') || location.origin.replace(/^http/, 'ws') + '/relay');
 
   function peerFor(fighterId) {
     if (peers[fighterId]) return peers[fighterId];

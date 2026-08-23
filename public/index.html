@@ -263,13 +263,6 @@
   }
   let activePrompts = buildPrompts('none'); // rebuilt at Start from the arena select
 
-  // Static mirrors (Netlify) have no backend of their own — token exchange, gallery list,
-  // and the relay all live on the Render deployment. Everywhere else (local npm start,
-  // Render itself) the backend is same-origin.
-  const BACKEND = location.hostname.endsWith('.netlify.app')
-    ? 'https://shadowbox-p8bq.onrender.com'
-    : location.origin;
-
   // Fighter id keys this session's feed on the broadcast page. No ?fighter= in the URL?
   // Ask, then reload with the choice in the URL (preserving ?key= etc.) so a refresh sticks.
   const fighterParam = new URLSearchParams(location.search).get('fighter');
@@ -321,7 +314,7 @@
   // Gallery of images already in public/ — clicking one selects it exactly like a dropped
   // file (still exactly ONE reference per session, applied on next Start).
   const gallery = document.getElementById('gallery');
-  fetch(BACKEND + '/references').then(r => r.json()).then(files => {
+  fetch('/references').then(r => r.json()).then(files => {
     for (const name of files) {
       const img = document.createElement('img');
       img.src = '/' + name;
@@ -392,7 +385,7 @@
   // before a session starts; WebRTC signaling rides the same socket once publishing begins.
   // Netlify (or any static host) can't serve the WebSocket relay — pass
   // ?relay=wss://<host>/relay to point at the laptop running `npm start`.
-  const relayWs = new WebSocket(new URLSearchParams(location.search).get('relay') || BACKEND.replace(/^http/, 'ws') + '/relay');
+  const relayWs = new WebSocket(new URLSearchParams(location.search).get('relay') || location.origin.replace(/^http/, 'ws') + '/relay');
   const relayReady = new Promise((resolve) => relayWs.addEventListener('open', resolve));
   relayWs.addEventListener('error', () => log('Relay connection failed (non-fatal — local view still works).', 'err'));
   relayWs.addEventListener('message', async (ev) => {
@@ -471,7 +464,7 @@
     log('Requesting JWT from /token…');
     // Hosted deployments guard /token with a shared secret (TOKEN_SECRET on the server) —
     // fighters carry it in the page URL as ?key=... . Absent locally, absent header, no harm.
-    const tokenRes = await fetch(BACKEND + '/token', {
+    const tokenRes = await fetch('/token', {
       method: 'POST',
       headers: { 'x-shadowbox-key': new URLSearchParams(location.search).get('key') || '' },
     });
