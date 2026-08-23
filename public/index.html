@@ -499,12 +499,23 @@
     }
 
     log('Requesting JWT from /token…');
-    // Hosted deployments guard /token with a shared secret (TOKEN_SECRET on the server) —
-    // fighters carry it in the page URL as ?key=... . Absent locally, absent header, no harm.
-    const tokenRes = await fetch('/token', {
+    // Hosted deployments guard /token with a shared secret (TOKEN_SECRET on the server).
+    // It can ride the URL (?key=...) or be typed once when the server rejects us — either
+    // way it's remembered per browser. Absent locally, absent header, no harm.
+    const urlKey = new URLSearchParams(location.search).get('key');
+    if (urlKey) localStorage.setItem('shadowbox_key', urlKey);
+    const mintToken = () => fetch('/token', {
       method: 'POST',
-      headers: { 'x-shadowbox-key': new URLSearchParams(location.search).get('key') || '' },
+      headers: { 'x-shadowbox-key': localStorage.getItem('shadowbox_key') || '' },
     });
+    let tokenRes = await mintToken();
+    if (tokenRes.status === 401) {
+      const entered = window.prompt('This deployment needs an access key (TOKEN_SECRET — ask the host, or Render dashboard → shadowbox → Environment):');
+      if (entered && entered.trim()) {
+        localStorage.setItem('shadowbox_key', entered.trim());
+        tokenRes = await mintToken();
+      }
+    }
     const tokenBody = await tokenRes.json();
     if (!tokenRes.ok) throw new Error('Token exchange failed: ' + JSON.stringify(tokenBody));
 
