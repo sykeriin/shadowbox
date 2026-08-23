@@ -56,7 +56,7 @@
 
   .stage { flex:1; min-height:0; position:relative; display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:14px 16px; }
   .pane { position:relative; background:#000; border:1px solid var(--line); overflow:hidden; display:flex; }
-  .pane video { width:100%; height:100%; object-fit:contain; background:#000; }
+  .pane video { width:100%; height:100%; object-fit:cover; background:#000; }
   /* Corner-colored top edge sweeping in from each fighter's own (outer) side, and a chamfer
      on each outer bottom corner. */
   .pane::before { content:""; position:absolute; top:0; left:0; right:0; height:3px; z-index:2; }
@@ -315,9 +315,11 @@
     for (const [fighterId, x0] of [['A', 0], ['B', HALF]]) {
       const video = document.getElementById('video-' + fighterId);
       if (!video || !video.videoWidth) continue;
-      const scale = Math.min(HALF / video.videoWidth, H / video.videoHeight);
-      const w = video.videoWidth * scale, h = video.videoHeight * scale;
-      ctx.drawImage(video, x0 + (HALF - w) / 2, (H - h) / 2, w, h);
+      // Cover-fit, matching the on-screen object-fit:cover — fill the half, crop the spill.
+      const scale = Math.max(HALF / video.videoWidth, H / video.videoHeight);
+      const sw = HALF / scale, sh = H / scale;
+      const sx = (video.videoWidth - sw) / 2, sy = (video.videoHeight - sh) / 2;
+      ctx.drawImage(video, sx, sy, sw, sh, x0, 0, HALF, H);
     }
   }
 
