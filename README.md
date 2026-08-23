@@ -86,21 +86,28 @@ One Node server does three small jobs: exchanges the API key for a browser-safe 
 (`POST /token`), serves the pages (HTTP :3000 + self-signed HTTPS :3443 for LAN webcams),
 and runs a three-client WebSocket flood relay for signaling, hit cues, and arena sync.
 
-## Hosting the pages (Netlify)
+## Hosting (Render)
 
-There's a `netlify.toml` that serves `public/` statically, ports `/token` to a serverless
-function (put `REACTOR_API_KEY` in the site's environment variables), and bakes the image
-gallery into `references.json` at build time. What Netlify **can't** host is the WebSocket
-relay — so signaling, hit cues, and arena sync still need a laptop running `npm start`,
-reachable through a tunnel. Point the hosted pages at it with
-`?relay=wss://<your-tunnel>/relay` (combine with `&fighter=B` etc.).
+Serverless hosts (Netlify/Vercel) can't run the WebSocket relay, so the whole server deploys
+to [Render](https://render.com) as one Node web service instead — `render.yaml` is the
+blueprint. Dashboard → **New → Blueprint** → pick this repo → paste `REACTOR_API_KEY` when
+prompted (`TOKEN_SECRET` is auto-generated). Render terminates TLS in front, so the
+self-signed-cert dance disappears; every laptop just opens the real HTTPS URL:
 
-**Do not deploy publicly until `/token` has auth** — see the warning below.
+| Page | URL |
+|---|---|
+| Fighter A | `https://<app>.onrender.com/?fighter=A&key=<TOKEN_SECRET>` |
+| Fighter B | `https://<app>.onrender.com/?fighter=B&key=<TOKEN_SECRET>` |
+| Broadcast | `https://<app>.onrender.com/broadcast.html` |
+
+The free plan spins down after ~15 min idle and takes ~1 min to cold-start — open the URL a
+few minutes before showtime. Fighters on different home networks may also need a TURN server
+for the WebRTC feeds (STUN alone often fails across NATs); same-LAN fighters are fine.
 
 ## ⚠️ Before you get creative
 
-- `REACTOR_API_KEY` is server-side only and never reaches the browser. But `/token` has
-  **no auth** — anyone who can reach the server can mint JWTs against your paid key. Keep it
-  on your LAN; add a shared secret before exposing it anywhere public.
+- `REACTOR_API_KEY` is server-side only and never reaches the browser. `/token` is guarded
+  by `TOKEN_SECRET` when set (fighter pages pass it as `?key=...`); with it unset — local
+  LAN use — the endpoint is open, so don't expose an unset deployment publicly.
 - X2 bills **per session-second, including idle**. Two fighters = double burn. Hit Stop when
   the fight's over — the button actually disconnects, it's not decorative.

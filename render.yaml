@@ -1,0 +1,21 @@
+# Render Blueprint: one Node web service runs the whole thing — static pages, /token
+# exchange, and the /relay WebSocket (which serverless hosts like Netlify/Vercel can't run).
+# REACTOR_API_KEY is sync:false so Render prompts for it in the dashboard instead of it
+# ever living in the repo.
+#
+# NOTE: the free plan spins down after ~15 min idle and cold-starts in ~1 min. Before a
+# live demo, open the URL a few minutes early to wake it up.
+services:
+  - type: web
+    name: shadowbox
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    envVars:
+      - key: REACTOR_API_KEY
+        sync: false
+      # Shared secret guarding /token on the public internet — pages must carry it as
+      # ?key=<value>. Render generates a random one; read it in the dashboard.
+      - key: TOKEN_SECRET
+        generateValue: true

@@ -446,7 +446,12 @@
     }
 
     log('Requesting JWT from /token…');
-    const tokenRes = await fetch('/token', { method: 'POST' });
+    // Hosted deployments guard /token with a shared secret (TOKEN_SECRET on the server) —
+    // fighters carry it in the page URL as ?key=... . Absent locally, absent header, no harm.
+    const tokenRes = await fetch('/token', {
+      method: 'POST',
+      headers: { 'x-shadowbox-key': new URLSearchParams(location.search).get('key') || '' },
+    });
     const tokenBody = await tokenRes.json();
     if (!tokenRes.ok) throw new Error('Token exchange failed: ' + JSON.stringify(tokenBody));
 

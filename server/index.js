@@ -28,6 +28,12 @@ app.use(express.static(path.join(__dirname, '../public')));
 // which is not what the SDK actually sends). If this breaks after an SDK upgrade, re-read
 // MODEL_NAME from the package rather than guessing.
 app.post('/token', async (req, res) => {
+  // Public-deployment guard (README warning): with TOKEN_SECRET set, only pages opened with
+  // the matching ?key=... may mint JWTs against the paid key. Unset (local LAN) = open.
+  const secret = process.env.TOKEN_SECRET;
+  if (secret && req.get('x-shadowbox-key') !== secret) {
+    return res.status(401).json({ error: 'missing or wrong ?key=... in the page URL' });
+  }
   // No real key on file yet (missing, or still the .env.example placeholder) — hand back a
   // mock JWT so the rest of the pipeline (webcam, server, client wiring) can be exercised
   // with zero Reactor calls. The client checks `mock: true` and loops the local webcam back
@@ -113,8 +119,13 @@ const httpServer = app.listen(PORT, () =>
   console.log(`HTTP  (host only): http://localhost:${PORT}`)
 );
 
+// On Render (or any host that terminates TLS in front of us), the platform provides real
+// HTTPS on the public URL — the self-signed cert exists only so LAN laptops get a secure
+// context locally. Render sets RENDER=true in the environment.
 let httpsServer;
-try {
+if (process.env.RENDER) {
+  console.log('Running on Render — platform TLS in front, skipping self-signed HTTPS listener.');
+} else try {
   const { key, cert } = await loadOrCreateCert();
   httpsServer = https.createServer({ key, cert }, app);
   httpsServer.listen(HTTPS_PORT, () => {
