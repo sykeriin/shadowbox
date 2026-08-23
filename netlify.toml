@@ -1,0 +1,23 @@
+# Netlify hosting: static pages from public/, /token as a serverless function.
+# The /relay WebSocket CANNOT run on Netlify (no WebSocket support in functions) —
+# run `npm start` on the host laptop and pass ?relay=wss://<tunnel>/relay to the
+# hosted pages (see HANDOFF.md / README notes).
+
+[build]
+  publish = "public"
+  # /references was served by the Express server; on Netlify the same list is baked
+  # into public/references.json at build time and a redirect below keeps the old URL.
+  command = "node -e \"const fs=require('fs');fs.writeFileSync('public/references.json',JSON.stringify(fs.readdirSync('public').filter(f=>/\\.(png|jpe?g|webp)$/i.test(f))))\""
+
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/token"
+  to = "/.netlify/functions/token"
+  status = 200
+
+[[redirects]]
+  from = "/references"
+  to = "/references.json"
+  status = 200

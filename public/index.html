@@ -5,94 +5,144 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Shadowbox — Fighter</title>
 <style>
+  /* Same two-corner broadcast language as broadcast.html: this page's accent (--corner) is
+     the fighter's own corner color — blue corner for A, red corner for B. Display face is
+     the condensed-heavy-italic of fight cards (Impact stack, no webfont so a LAN demo with
+     no internet still renders it); mono is the utility face. */
   :root {
-    --bg:#0a0c10; --panel:#12151b; --fg:#e8e6e0; --dim:#7c7f86; --line:#242a33;
-    --hot:#4ade80; --bad:#f87171; --accent:#818cf8; --accent2:#f472b6;
+    --bg:#05060a; --steel:#0d1017; --panel:#131824; --fg:#eef1f6; --dim:#7d8698; --line:#242c3c;
+    --corner-a:#3fc1ff; --corner-b:#ff3d6e; --live:#3dffa8; --hit:#ff4d4d;
+    --corner:var(--corner-a);
+    --display: Impact, Haettenschweiler, "Franklin Gothic Medium", "Arial Narrow Bold", sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
   }
+  body[data-fighter="B"] { --corner:var(--corner-b); }
   * { box-sizing:border-box; }
   html, body { height:100%; }
   body {
-    margin:0; background:var(--bg); color:var(--fg);
-    font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin:0; color:var(--fg);
+    font:13px/1.5 var(--mono);
     display:flex; flex-direction:column; height:100vh; overflow:hidden;
+    background:
+      radial-gradient(900px 420px at 50% -10%, color-mix(in srgb, var(--corner) 14%, transparent), transparent 60%),
+      repeating-linear-gradient(115deg, rgba(255,255,255,.012) 0 2px, transparent 2px 26px),
+      var(--bg);
   }
+  :focus-visible { outline:2px solid var(--corner); outline-offset:2px; }
 
   header {
-    display:flex; align-items:center; gap:14px; padding:10px 18px;
-    border-bottom:1px solid var(--line); background:var(--panel); flex:none;
+    display:flex; align-items:center; gap:16px; padding:10px 18px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--panel), var(--steel)); flex:none;
   }
-  .brand { font-weight:800; letter-spacing:.14em; font-size:15px; }
-  .brand em { color:var(--accent); font-style:normal; }
+  .brand {
+    font-family:var(--display); font-style:italic; font-size:24px; line-height:1;
+    text-transform:uppercase; letter-spacing:.02em; color:var(--corner-a);
+  }
+  .brand em { color:var(--corner-b); font-style:italic; }
   .badge {
-    font-size:12px; font-weight:700; letter-spacing:.08em; padding:3px 10px;
-    border:1px solid var(--accent); color:var(--accent); border-radius:999px;
+    font-family:var(--display); font-style:italic; font-size:16px; line-height:1;
+    text-transform:uppercase; letter-spacing:.04em;
+    color:var(--bg); background:var(--corner); padding:6px 14px; transform:skewX(-12deg);
   }
-  .status { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim); }
-  .dot { width:8px; height:8px; border-radius:50%; background:var(--dim); }
-  .dot.live { background:var(--hot); box-shadow:0 0 8px var(--hot); }
+  .status { display:flex; align-items:center; gap:7px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--dim); }
+  .dot.live { background:var(--live); box-shadow:0 0 10px var(--live); animation:blink 1.6s infinite; }
+  @keyframes blink { 50% { opacity:.25; } }
   header .spacer { flex:1; }
 
   .stage {
-    flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:10px;
+    flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:14px 16px;
   }
   .pane {
-    position:relative; background:#000; border:1px solid var(--line); border-radius:10px;
+    position:relative; background:#000; border:1px solid var(--line);
     overflow:hidden; display:flex;
   }
   .pane video { width:100%; height:100%; object-fit:contain; background:#000; }
   .pane .tag {
-    position:absolute; top:10px; left:10px; z-index:2; font-size:11px; font-weight:700;
-    letter-spacing:.1em; text-transform:uppercase; color:var(--dim);
-    background:rgba(0,0,0,.55); padding:4px 10px; border-radius:6px;
+    position:absolute; top:12px; left:14px; z-index:2;
+    font:700 10px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
+    background:rgba(8,10,15,.85); border:1px solid var(--line); padding:6px 10px;
+    transform:skewX(-12deg);
   }
-  .pane.robot .tag { color:var(--accent2); }
+  .pane.robot { clip-path:polygon(0 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%); }
+  .pane.robot::before {
+    content:""; position:absolute; top:0; left:0; right:0; height:3px; z-index:2;
+    background:linear-gradient(90deg, var(--corner), transparent 75%);
+  }
+  .pane.robot .tag { color:var(--corner); border-left:3px solid var(--corner); }
 
   .controls {
-    display:flex; align-items:center; gap:10px; padding:10px 14px; flex-wrap:wrap;
-    border-top:1px solid var(--line); background:var(--panel); flex:none;
+    display:flex; align-items:center; gap:10px; padding:12px 16px; flex-wrap:wrap;
+    border-top:1px solid var(--line);
+    background:linear-gradient(0deg, var(--panel), var(--steel)); flex:none;
   }
-  .controls label.inline { font-size:12px; color:var(--dim); display:flex; align-items:center; gap:6px; }
+  .controls label.inline { font-size:11px; color:var(--dim); display:flex; align-items:center; gap:6px; }
+  .controls input[type="checkbox"] { accent-color:var(--corner); }
   select {
-    font:inherit; background:#0d0f13; color:var(--fg); border:1px solid var(--line);
-    border-radius:8px; padding:8px 10px; max-width:220px;
+    font:12px var(--mono); background:var(--steel); color:var(--fg); border:1px solid var(--line);
+    padding:10px; max-width:230px; letter-spacing:.04em;
   }
   .drop {
-    display:flex; align-items:center; gap:8px; border:1px dashed var(--line); border-radius:8px;
-    padding:6px 10px; cursor:pointer; color:var(--dim); font-size:12px; max-width:300px;
+    display:flex; align-items:center; gap:8px; border:1px dashed var(--line);
+    padding:6px 10px; cursor:pointer; color:var(--dim); font-size:11px; max-width:300px;
   }
-  .drop:hover, .drop.over { border-color:var(--accent); color:var(--fg); }
-  .drop img { width:34px; height:34px; object-fit:cover; border-radius:6px; display:none; }
+  .drop:hover, .drop.over { border-color:var(--corner); color:var(--fg); }
+  .drop img { width:34px; height:34px; object-fit:cover; display:none; }
   .drop img.set { display:block; }
   .gallery { display:flex; gap:6px; align-items:center; }
   .gallery img {
-    width:34px; height:34px; object-fit:cover; border-radius:6px;
+    width:34px; height:34px; object-fit:cover;
     border:1px solid var(--line); cursor:pointer;
   }
-  .gallery img:hover { border-color:var(--accent); }
-  .gallery img.sel { border-color:var(--accent); box-shadow:0 0 6px var(--accent); }
+  .gallery img:hover { border-color:var(--corner); }
+  .gallery img.sel { border-color:var(--corner); box-shadow:0 0 8px var(--corner); }
   button {
-    font:inherit; font-weight:700; border-radius:8px; padding:9px 18px; cursor:pointer;
-    background:transparent; color:var(--fg); border:1px solid var(--line);
+    font:700 12px/1 var(--mono); letter-spacing:.06em; text-transform:uppercase;
+    padding:12px 18px; cursor:pointer;
+    background:var(--steel); color:var(--fg); border:1px solid var(--line);
   }
-  button:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  button:hover:not(:disabled) { border-color:var(--corner); color:var(--corner); }
   button:disabled { color:var(--dim); cursor:not-allowed; }
-  #start.primary { background:var(--accent); border-color:var(--accent); color:#0a0c10; }
-  #start.primary:hover:not(:disabled) { filter:brightness(1.12); color:#0a0c10; }
-  #start.stop { background:transparent; border-color:var(--bad); color:var(--bad); }
-  #record.rec { border-color:var(--bad); color:var(--bad); animation:pulse 1.2s infinite; }
+  #start.primary { background:var(--corner); border-color:var(--corner); color:var(--bg); }
+  #start.primary:hover:not(:disabled) { filter:brightness(1.12); color:var(--bg); }
+  #start.stop { background:transparent; border-color:var(--hit); color:var(--hit); }
+  #record { border-left:3px solid var(--hit); }
+  #record.rec { border-color:var(--hit); color:var(--hit); animation:pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity:.55; } }
   .controls .spacer { flex:1; }
-  .hint { font-size:11px; color:var(--dim); }
+  .hint { font-size:11px; color:var(--dim); letter-spacing:.04em; }
+
+  /* Full-screen cue so the fighter can't miss the moment they must physically perform the
+     reaction (CLAUDE.md constraint 7 — the prompt swap alone renders nothing convincing). */
+  #hitCue {
+    position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center;
+    pointer-events:none;
+    background:radial-gradient(ellipse at center, rgba(255,77,77,.15), rgba(255,77,77,.45));
+  }
+  #hitCue.show { display:flex; animation:cueFlash 1.6s ease-out forwards; }
+  #hitCue span {
+    font-family:var(--display); font-style:italic; font-size:9vw; line-height:1;
+    text-transform:uppercase; color:#fff; text-shadow:0 0 40px var(--hit);
+    transform:skewX(-8deg);
+  }
+  #hitCue.reset { background:radial-gradient(ellipse at center, rgba(61,255,168,.12), rgba(61,255,168,.35)); }
+  #hitCue.reset span { text-shadow:0 0 40px var(--live); }
+  @keyframes cueFlash { 0%, 60% { opacity:1; } 100% { opacity:0; } }
 
   #log {
-    flex:none; max-height:96px; overflow-y:auto; padding:6px 14px;
-    font:11px/1.6 ui-monospace, Menlo, monospace; color:var(--dim);
+    flex:none; max-height:96px; overflow-y:auto; padding:6px 16px;
+    font:11px/1.6 var(--mono); color:var(--dim);
     border-top:1px solid var(--line); white-space:pre-wrap;
   }
-  #log .ok { color:var(--hot); }
-  #log .err { color:var(--bad); }
+  #log .ok { color:var(--live); }
+  #log .err { color:var(--hit); }
 
   @media (max-width:760px){ .stage{ grid-template-columns:1fr; grid-template-rows:1fr 1fr; } }
+  @media (prefers-reduced-motion: reduce) {
+    .dot.live, #record.rec { animation:none; }
+    #hitCue.show { animation:cueFlash 1.6s step-end forwards; }
+  }
 </style>
 </head>
 <body>
@@ -127,12 +177,22 @@
   <div class="gallery" id="gallery" title="Or pick an image already in the public folder"></div>
 
   <label class="inline"><input type="checkbox" id="voiceMorph"> Robot voice (mic)</label>
-  <label class="inline" title="X2 repaints your room as a fight arena. Same arena text on both fighters so the split-screen reads as one venue. If your character's identity weakens, turn this off — stacked edits compete."><input type="checkbox" id="arenaBg" checked> Arena background</label>
+  <select id="arena" title="X2 repaints your room as this arena. Your choice is synced to the other fighter so the split-screen reads as one venue. If your character's identity weakens, pick 'No arena' — stacked edits compete.">
+    <option value="random" selected>Random arena</option>
+    <option value="neon">Neon coliseum</option>
+    <option value="junkyard">Wasteland junkyard</option>
+    <option value="volcano">Volcano crater</option>
+    <option value="glacier">Glacier field</option>
+    <option value="rooftop">City rooftop</option>
+    <option value="none">No arena — real room</option>
+  </select>
 
   <div class="spacer"></div>
   <button id="record" disabled>● Record</button>
   <button id="start" class="primary" disabled>Start</button>
 </div>
+
+<div id="hitCue"><span></span></div>
 
 <div id="log"></div>
 
@@ -157,6 +217,7 @@
   const dropText = document.getElementById('dropText');
   const refFileInput = document.getElementById('refFile');
   const voiceMorphChk = document.getElementById('voiceMorph');
+  const arenaSelect = document.getElementById('arena');
   const statusDot = document.getElementById('statusDot');
   const statusText = document.getElementById('statusText');
 
@@ -171,34 +232,42 @@
   // image supplies appearance (which is what makes drop-in custom characters work: the
   // prompt is generic, the identity comes entirely from the uploaded image). Both states are
   // complete prompts; the guide forbids relative follow-ups like "now stagger".
-  // Two background modes. "preserve" is the guide-recommended single-edit prompt. "arena"
-  // stacks a background replacement on top — the guide warns stacked edits compete, so if
-  // character identity weakens, the toggle turns it off. The arena text is IDENTICAL for
-  // both fighters so the side-by-side broadcast reads as one venue.
-  const PROMPTS = {
-    preserve: {
-      standing:
-        '视频中角色替换成参考图中角色\n' +
-        '仅将画面中央的人物替换为参考图角色。保留该人物的表情、视线、姿势和手部动作；背景、其他人物和镜头保持不变。',
-      staggered:
-        '视频中角色替换成参考图中角色\n' +
-        '仅将画面中央的人物替换为参考图角色。该角色刚被击中，正踉跄后退、失去平衡、防御松散，动作与画面中人物的真实动作完全一致；背景、其他人物和镜头保持不变。',
-    },
-    arena: {
-      standing:
-        '视频中角色替换成参考图中角色\n' +
-        '将画面中央的人物替换为参考图角色，并将背景替换为科幻格斗竞技场：深色金属地面，环形霓虹灯光，远处观众席。保留该人物的表情、姿势和手部动作；镜头保持不变。',
-      staggered:
-        '视频中角色替换成参考图中角色\n' +
-        '将画面中央的人物替换为参考图角色，并将背景替换为科幻格斗竞技场：深色金属地面，环形霓虹灯光，远处观众席。该角色刚被击中，正踉跄后退、失去平衡、防御松散，动作与画面中人物的真实动作完全一致；镜头保持不变。',
-    },
+  //
+  // Arena variants: the same background-replacement structure with a different venue
+  // description per key. The chosen key is relayed to the other fighter's page so both
+  // sessions render the SAME venue and the split-screen broadcast reads as one arena.
+  // 'none' is the guide-recommended single-edit prompt (real room kept) — the guide warns
+  // stacked edits compete, so if character identity weakens, pick 'none'.
+  const ARENAS = {
+    neon:     '科幻格斗竞技场：深色金属地面，环形霓虹灯光，远处观众席',
+    junkyard: '废土垃圾场格斗区：锈蚀金属残骸，扬尘的黄昏天空，四周堆积的废弃机械',
+    volcano:  '火山口格斗台：黑色岩石地面，流动的熔岩裂缝，橙红色炽热光芒',
+    glacier:  '冰川格斗场：湛蓝冰面，飘雪的极光夜空，四周耸立的冰柱',
+    rooftop:  '未来都市天台擂台：夜晚霓虹摩天楼背景，雨后反光地面，探照灯光柱',
   };
-  let promptMode = 'arena'; // read from the checkbox at Start
+  function buildPrompts(arenaKey) {
+    const prefix = '视频中角色替换成参考图中角色\n';
+    if (!arenaKey || arenaKey === 'none') return {
+      standing:
+        prefix + '仅将画面中央的人物替换为参考图角色。保留该人物的表情、视线、姿势和手部动作；背景、其他人物和镜头保持不变。',
+      staggered:
+        prefix + '仅将画面中央的人物替换为参考图角色。该角色刚被击中，正踉跄后退、失去平衡、防御松散，动作与画面中人物的真实动作完全一致；背景、其他人物和镜头保持不变。',
+    };
+    const arena = ARENAS[arenaKey];
+    return {
+      standing:
+        prefix + '将画面中央的人物替换为参考图角色，并将背景替换为' + arena + '。保留该人物的表情、姿势和手部动作；镜头保持不变。',
+      staggered:
+        prefix + '将画面中央的人物替换为参考图角色，并将背景替换为' + arena + '。该角色刚被击中，正踉跄后退、失去平衡、防御松散，动作与画面中人物的真实动作完全一致；镜头保持不变。',
+    };
+  }
+  let activePrompts = buildPrompts('none'); // rebuilt at Start from the arena select
 
   // Fighter id keys this session's feed on the broadcast page.
   const fighter = new URLSearchParams(location.search).get('fighter') || 'A';
   document.title = 'Shadowbox — Fighter ' + fighter;
   document.getElementById('fighterBadge').textContent = 'FIGHTER ' + fighter;
+  document.body.dataset.fighter = fighter; // corner color (blue corner A / red corner B)
   if (!new URLSearchParams(location.search).get('fighter')) {
     log('No ?fighter= in URL — defaulting to Fighter A. Open the second session as ?fighter=B.', 'err');
   }
@@ -243,7 +312,6 @@
     }
   }).catch(() => {});
 
-  let relayWs;
   let pc;
   let x2Instance;          // real X2 session; undefined in mock mode
   let currentStream;       // webcam MediaStream, released on Stop
@@ -254,13 +322,28 @@
   let recorder;            // active MediaRecorder, if recording
 
   // Hit cue: only ever swaps the PROMPT (CLAUDE.md constraint 7 — the fighter must
-  // physically perform the reaction; text alone cannot fake motion).
+  // physically perform the reaction; text alone cannot fake motion). The full-screen cue is
+  // what tells the human to perform it — a log line is too easy to miss mid-fight.
+  const hitCue = document.getElementById('hitCue');
+  let cueTimer;
+  function showCue(staggered) {
+    hitCue.querySelector('span').textContent = staggered ? 'HIT — REACT!' : 'RESET — STAND UP';
+    hitCue.classList.toggle('reset', !staggered);
+    hitCue.classList.remove('show');
+    // restart the animation even if two cues land back to back
+    void hitCue.offsetWidth;
+    hitCue.classList.add('show');
+    clearTimeout(cueTimer);
+    cueTimer = setTimeout(() => hitCue.classList.remove('show'), 1700);
+  }
+
   async function applyHitState(staggered) {
+    showCue(staggered);
     if (!x2Instance) {
-      log('Hit cue received (mock mode — no real X2 session, prompt not sent).', 'err');
+      log('Hit cue received, but no live X2 session — nothing to update.', 'err');
       return;
     }
-    await x2Instance.setPrompt({ prompt: PROMPTS[promptMode][staggered ? 'staggered' : 'standing'] });
+    await x2Instance.setPrompt({ prompt: activePrompts[staggered ? 'staggered' : 'standing'] });
     log((staggered ? 'Staggered' : 'Recovery') + ' prompt sent — react physically now, ~1s settling delay.', 'ok');
   }
 
@@ -282,33 +365,43 @@
     return dest.stream.getAudioTracks()[0];
   }
 
+  // One relay connection for the page's whole life: hit cues and arena sync must work even
+  // before a session starts; WebRTC signaling rides the same socket once publishing begins.
+  // Netlify (or any static host) can't serve the WebSocket relay — pass
+  // ?relay=wss://<host>/relay to point at the laptop running `npm start`.
+  const relayWs = new WebSocket(new URLSearchParams(location.search).get('relay') || location.origin.replace(/^http/, 'ws') + '/relay');
+  const relayReady = new Promise((resolve) => relayWs.addEventListener('open', resolve));
+  relayWs.addEventListener('error', () => log('Relay connection failed (non-fatal — local view still works).', 'err'));
+  relayWs.addEventListener('message', async (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'hit' && msg.target === fighter) return applyHitState(true);
+    if (msg.type === 'reset' && (!msg.target || msg.target === fighter)) return applyHitState(false);
+    if (msg.type === 'arena' && !running) {
+      arenaSelect.value = msg.arena;
+      log('Arena synced from the other fighter: ' + msg.arena + ' — same venue on both halves.', 'ok');
+      return;
+    }
+    if (msg.fighterId !== fighter || !pc) return;
+    if (msg.type === 'answer') await pc.setRemoteDescription(msg.sdp);
+    if (msg.type === 'ice' && msg.from === 'broadcast') await pc.addIceCandidate(msg.candidate).catch(() => {});
+  });
+
   // Push the rendered feed (+ morphed voice if enabled) to the broadcast page over WebRTC,
   // signalled through the server's flood relay. Composite-after-generation per CLAUDE.md.
-  function publishToBroadcast(videoTrack) {
+  async function publishToBroadcast(videoTrack) {
     const outStream = new MediaStream(
       morphedAudioTrack ? [videoTrack, morphedAudioTrack] : [videoTrack]
     );
-    relayWs = new WebSocket(location.origin.replace(/^http/, 'ws') + '/relay');
     pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     for (const track of outStream.getTracks()) pc.addTrack(track, outStream);
     pc.onicecandidate = (e) => {
       if (e.candidate) relayWs.send(JSON.stringify({ type: 'ice', fighterId: fighter, from: 'fighter', candidate: e.candidate }));
     };
-    relayWs.addEventListener('open', async () => {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      relayWs.send(JSON.stringify({ type: 'offer', fighterId: fighter, sdp: pc.localDescription }));
-      log('Feed offered to broadcast page (' + (morphedAudioTrack ? 'video+voice' : 'video only') + ').', 'ok');
-    });
-    relayWs.addEventListener('message', async (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === 'hit' && msg.target === fighter) return applyHitState(true);
-      if (msg.type === 'reset' && (!msg.target || msg.target === fighter)) return applyHitState(false);
-      if (msg.fighterId !== fighter) return;
-      if (msg.type === 'answer') await pc.setRemoteDescription(msg.sdp);
-      if (msg.type === 'ice' && msg.from === 'broadcast') await pc.addIceCandidate(msg.candidate).catch(() => {});
-    });
-    relayWs.addEventListener('error', () => log('Broadcast relay connection failed (non-fatal — local view still works).', 'err'));
+    await relayReady;
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    relayWs.send(JSON.stringify({ type: 'offer', fighterId: fighter, sdp: pc.localDescription }));
+    log('Feed offered to broadcast page (' + (morphedAudioTrack ? 'video+voice' : 'video only') + ').', 'ok');
   }
 
   async function refreshCameraList() {
@@ -324,8 +417,19 @@
 
   async function startSession() {
     setStatus('starting…', false);
-    promptMode = document.getElementById('arenaBg').checked ? 'arena' : 'preserve';
-    log('Background mode: ' + (promptMode === 'arena' ? 'arena (X2 repaints the room)' : 'preserve (real room kept)'));
+    // Resolve the arena for this render: 'random' rolls a fresh venue each Start, and the
+    // choice is relayed so the other fighter's page adopts the same one (one venue across
+    // the split-screen). The other page only adopts it while idle — a running session keeps
+    // the arena it started with.
+    let arenaKey = arenaSelect.value;
+    if (arenaKey === 'random') {
+      const keys = Object.keys(ARENAS);
+      arenaKey = keys[Math.floor(Math.random() * keys.length)];
+      arenaSelect.value = arenaKey;
+    }
+    activePrompts = buildPrompts(arenaKey);
+    log('Arena: ' + (arenaKey === 'none' ? 'none (real room kept)' : arenaKey + ' (X2 repaints the room)'));
+    relayReady.then(() => relayWs.send(JSON.stringify({ type: 'arena', arena: arenaKey })));
     log('Requesting webcam…');
     const deviceId = cameraSelect.value;
     const videoConstraint = deviceId ? { deviceId: { exact: deviceId } } : true;
@@ -350,7 +454,7 @@
       log('MOCK MODE — no REACTOR_API_KEY set, no Reactor call made, no credits spent.', 'ok');
       remoteVideo.srcObject = stream;
       outputVideoTrack = stream.getVideoTracks()[0];
-      publishToBroadcast(outputVideoTrack);
+      publishToBroadcast(outputVideoTrack).catch((err) => log('Broadcast publish failed: ' + err.message, 'err'));
       recordBtn.disabled = false;
       setStatus('mock loopback', true);
       return;
@@ -374,7 +478,7 @@
       remoteVideo.srcObject = remoteStream;
       remoteVideo.play().catch(() => {});
       outputVideoTrack = track;
-      publishToBroadcast(track);
+      publishToBroadcast(track).catch((err) => log('Broadcast publish failed: ' + err.message, 'err'));
       recordBtn.disabled = false;
       setStatus('live — generating', true);
     });
@@ -427,7 +531,7 @@
       log('No reference image — generation will follow the prompt text only.', 'err');
     }
 
-    await x2.setPrompt({ prompt: PROMPTS[promptMode].standing });
+    await x2.setPrompt({ prompt: activePrompts.standing });
     log('Prompt set. Generation begins once frames are flowing — expect ~1s settling delay.', 'ok');
     setStatus('live — waiting for first frames', true);
   }
@@ -440,8 +544,7 @@
       await x2Instance.disconnect().catch((err) => log('disconnect() failed: ' + err.message, 'err'));
       x2Instance = null;
     }
-    if (pc) { pc.close(); pc = null; }
-    if (relayWs) { relayWs.close(); relayWs = null; }
+    if (pc) { pc.close(); pc = null; } // relayWs stays open — hit cues and arena sync outlive sessions
     if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
     if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }

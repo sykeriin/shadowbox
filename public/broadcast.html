@@ -5,108 +5,156 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Shadowbox — Broadcast</title>
 <style>
+  /* Two-corner fight-broadcast language: Fighter A owns the blue corner, Fighter B the red
+     corner, and every accent on the page derives from whichever fighter it belongs to.
+     Display face is the condensed-heavy-italic of fight cards (Impact stack — no webfont, so
+     a LAN demo with no internet still renders it); mono is the utility/telemetry face. */
   :root {
-    --bg:#0a0c10; --panel:#12151b; --fg:#e8e6e0; --dim:#7c7f86; --line:#242a33;
-    --hot:#4ade80; --bad:#f87171; --accent:#818cf8; --accent2:#f472b6;
+    --bg:#05060a; --steel:#0d1017; --panel:#131824; --fg:#eef1f6; --dim:#7d8698; --line:#242c3c;
+    --corner-a:#3fc1ff; --corner-b:#ff3d6e; --live:#3dffa8; --hit:#ff4d4d;
+    --display: Impact, Haettenschweiler, "Franklin Gothic Medium", "Arial Narrow Bold", sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
   }
   * { box-sizing:border-box; }
   html, body { height:100%; }
   body {
     margin:0; color:var(--fg);
-    font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font:13px/1.5 var(--mono);
     display:flex; flex-direction:column; height:100vh; overflow:hidden;
     background:
-      radial-gradient(1200px 500px at 20% -10%, rgba(129,140,248,.14), transparent 60%),
-      radial-gradient(1200px 500px at 80% -10%, rgba(244,114,182,.12), transparent 60%),
+      radial-gradient(900px 420px at 8% -8%, rgba(63,193,255,.16), transparent 60%),
+      radial-gradient(900px 420px at 92% -8%, rgba(255,61,110,.15), transparent 60%),
+      repeating-linear-gradient(115deg, rgba(255,255,255,.012) 0 2px, transparent 2px 26px),
       var(--bg);
   }
+  :focus-visible { outline:2px solid var(--fg); outline-offset:2px; }
 
   header {
-    display:flex; align-items:center; gap:14px; padding:10px 18px;
-    border-bottom:1px solid var(--line); background:var(--panel); flex:none;
+    display:flex; align-items:center; gap:16px; padding:10px 18px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--panel), var(--steel)); flex:none;
   }
-  .brand { font-weight:800; letter-spacing:.14em; font-size:15px; }
-  .brand em { color:var(--accent); font-style:normal; }
-  .badge {
-    font-size:12px; font-weight:700; letter-spacing:.08em; padding:3px 10px;
-    border:1px solid var(--accent2); color:var(--accent2); border-radius:999px;
+  .brand {
+    font-family:var(--display); font-style:italic; font-size:24px; line-height:1;
+    text-transform:uppercase; letter-spacing:.02em; color:var(--corner-a);
   }
-  header .spacer { flex:1; }
-  .hint { font-size:11px; color:var(--dim); }
-  .hint kbd {
-    font:11px ui-monospace, Menlo, monospace; color:var(--fg);
-    border:1px solid var(--line); border-radius:4px; padding:0 5px; background:#0d0f13;
-  }
-
-  .stage { flex:1; min-height:0; position:relative; display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:10px; }
-  .pane {
-    position:relative; background:#000; border:1px solid var(--line); border-radius:10px;
-    overflow:hidden; display:flex;
-  }
-  .pane video { width:100%; height:100%; object-fit:contain; background:#000; }
-  .plate {
-    position:absolute; bottom:14px; left:50%; transform:translateX(-50%); z-index:2;
+  .brand em { color:var(--corner-b); font-style:italic; }
+  .bug {
     display:flex; align-items:center; gap:8px;
-    font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
-    background:rgba(10,12,16,.75); border:1px solid var(--line); border-radius:8px; padding:6px 14px;
-    white-space:nowrap;
+    font:700 11px/1 var(--mono); letter-spacing:.22em; text-transform:uppercase;
+    color:#ffb3c2; background:rgba(255,61,110,.12); border:1px solid rgba(255,61,110,.45);
+    padding:6px 10px;
   }
-  .pane[data-fighter="A"] .plate { border-color:var(--accent); color:var(--accent); }
-  .pane[data-fighter="B"] .plate { border-color:var(--accent2); color:var(--accent2); }
-  .plate .dot { width:8px; height:8px; border-radius:50%; background:var(--dim); flex:none; }
-  .plate .dot.live { background:var(--hot); box-shadow:0 0 8px var(--hot); }
-  .plate .state { color:var(--dim); font-weight:400; letter-spacing:.04em; text-transform:none; }
+  .bug .bdot { width:8px; height:8px; border-radius:50%; background:var(--hit); box-shadow:0 0 10px var(--hit); animation:blink 1.6s infinite; }
+  @keyframes blink { 50% { opacity:.25; } }
+  header .spacer { flex:1; }
+  .hint { font-size:11px; color:var(--dim); letter-spacing:.04em; }
+  .hint kbd {
+    font:11px var(--mono); color:var(--fg);
+    border:1px solid var(--line); padding:1px 6px; background:var(--steel);
+  }
 
+  .stage { flex:1; min-height:0; position:relative; display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:14px 16px; }
+  .pane { position:relative; background:#000; border:1px solid var(--line); overflow:hidden; display:flex; }
+  .pane video { width:100%; height:100%; object-fit:contain; background:#000; }
+  /* Corner-colored top edge sweeping in from each fighter's own (outer) side, and a chamfer
+     on each outer bottom corner. */
+  .pane::before { content:""; position:absolute; top:0; left:0; right:0; height:3px; z-index:2; }
+  .pane[data-fighter="A"] { clip-path:polygon(0 0, 100% 0, 100% 100%, 22px 100%, 0 calc(100% - 22px)); }
+  .pane[data-fighter="A"]::before { background:linear-gradient(90deg, var(--corner-a), transparent 75%); }
+  .pane[data-fighter="B"] { clip-path:polygon(0 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%); }
+  .pane[data-fighter="B"]::before { background:linear-gradient(270deg, var(--corner-b), transparent 75%); }
+
+  /* Lower-third name plates, skewed like broadcast fight cards. */
+  .plate {
+    position:absolute; bottom:18px; z-index:3; display:flex; align-items:center; gap:10px;
+    padding:8px 18px; background:rgba(8,10,15,.85); border:1px solid var(--line);
+    transform:skewX(-12deg); white-space:nowrap;
+  }
+  .plate > * { transform:skewX(12deg); }
+  .pane[data-fighter="A"] .plate { left:20px; border-left:3px solid var(--corner-a); }
+  .pane[data-fighter="B"] .plate { right:20px; border-right:3px solid var(--corner-b); }
+  .plate .name { font-family:var(--display); font-style:italic; text-transform:uppercase; font-size:19px; line-height:1; letter-spacing:.04em; }
+  .pane[data-fighter="A"] .name { color:var(--corner-a); }
+  .pane[data-fighter="B"] .name { color:var(--corner-b); }
+  .plate .dot { width:9px; height:9px; border-radius:50%; background:var(--dim); flex:none; }
+  .plate .dot.live { background:var(--live); box-shadow:0 0 10px var(--live); animation:blink 1.6s infinite; }
+  .plate .state { color:var(--dim); font-size:11px; letter-spacing:.1em; text-transform:uppercase; }
+
+  /* The signature: a slanted seam splitting the frame — blue corner bleeding in from the
+     top, red corner out the bottom — with the VS plate riding it at center. */
+  .seam { position:absolute; top:0; bottom:0; left:50%; width:0; z-index:4; pointer-events:none; }
+  .seam::before {
+    content:""; position:absolute; top:0; bottom:0; left:-1px; width:2px;
+    background:linear-gradient(180deg, transparent, var(--corner-a) 20%, #fff 50%, var(--corner-b) 80%, transparent);
+    transform:skewX(-12deg); box-shadow:0 0 18px rgba(255,255,255,.25);
+  }
   .vs {
-    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:3;
-    width:64px; height:64px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center;
-    font-size:20px; font-weight:900; font-style:italic; letter-spacing:.05em;
-    color:var(--fg); background:var(--panel); border:1px solid var(--line);
-    box-shadow:0 0 24px rgba(129,140,248,.35), 0 0 48px rgba(244,114,182,.2);
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) skewX(-12deg); z-index:5;
+    font-family:var(--display); font-style:italic; font-size:30px; line-height:1;
+    padding:12px 18px 10px; color:var(--fg);
+    background:linear-gradient(135deg, #161b27, #0a0d14); border:1px solid var(--line);
+    box-shadow:0 0 30px rgba(63,193,255,.25), 0 0 60px rgba(255,61,110,.2);
     pointer-events:none;
   }
 
   /* Cosmetic hit sting only — fires instantly on the manual cue, purely visual, never touches
      X2's prompt/state. The real staggered look still depends on the fighter physically
-     reacting; this is just an immediate broadcast-graphic-style flash so the moment reads
-     before that ~1s settling delay lands. */
-  .pane.hit-flash { animation: hitFlash 300ms ease-out; }
+     reacting; this is just an immediate broadcast-graphic-style flash (plus a camera shake)
+     so the moment reads before that ~1s settling delay lands. */
+  .pane.hit-flash { animation: hitFlash 300ms ease-out, hitShake 280ms linear; }
   @keyframes hitFlash {
-    0%   { box-shadow: inset 0 0 0 9999px rgba(248,113,113,.55); }
-    100% { box-shadow: inset 0 0 0 9999px rgba(248,113,113,0); }
+    0%   { box-shadow: inset 0 0 0 9999px rgba(255,77,77,.55); }
+    100% { box-shadow: inset 0 0 0 9999px rgba(255,77,77,0); }
+  }
+  @keyframes hitShake {
+    0%, 100% { transform:translate(0,0); }
+    20% { transform:translate(-6px,3px); }
+    40% { transform:translate(5px,-3px); }
+    60% { transform:translate(-4px,2px); }
+    80% { transform:translate(3px,-1px); }
   }
 
   .controls {
-    display:flex; align-items:center; gap:10px; padding:10px 14px; flex-wrap:wrap;
-    border-top:1px solid var(--line); background:var(--panel); flex:none;
+    display:flex; align-items:center; gap:10px; padding:12px 16px; flex-wrap:wrap;
+    border-top:1px solid var(--line);
+    background:linear-gradient(0deg, var(--panel), var(--steel)); flex:none;
   }
   button {
-    font:inherit; font-weight:700; border-radius:8px; padding:9px 18px; cursor:pointer;
-    background:transparent; color:var(--fg); border:1px solid var(--line);
+    font:700 12px/1 var(--mono); letter-spacing:.06em; text-transform:uppercase;
+    padding:12px 18px; cursor:pointer;
+    background:var(--steel); color:var(--fg); border:1px solid var(--line);
   }
-  button:hover { border-color:var(--accent); color:var(--accent); }
+  button:hover { border-color:var(--fg); }
   button kbd { color:var(--dim); font-weight:400; }
-  #hit-A:hover { border-color:var(--accent); color:var(--accent); }
-  #hit-B:hover { border-color:var(--accent2); color:var(--accent2); }
-  #reset:hover { border-color:var(--hot); color:var(--hot); }
+  #hit-A { border-left:3px solid var(--corner-a); }
+  #hit-A:hover { border-color:var(--corner-a); color:var(--corner-a); }
+  #hit-B { border-left:3px solid var(--corner-b); }
+  #hit-B:hover { border-color:var(--corner-b); color:var(--corner-b); }
+  #reset:hover { border-color:var(--live); color:var(--live); }
   .controls .spacer { flex:1; }
-  #record.rec { border-color:var(--bad); color:var(--bad); animation:pulse 1.2s infinite; }
+  #record { border-left:3px solid var(--hit); }
+  #record.rec { border-color:var(--hit); color:var(--hit); animation:pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity:.55; } }
 
   #log {
-    flex:none; max-height:96px; overflow-y:auto; padding:6px 14px;
-    font:11px/1.6 ui-monospace, Menlo, monospace; color:var(--dim);
+    flex:none; max-height:96px; overflow-y:auto; padding:6px 16px;
+    font:11px/1.6 var(--mono); color:var(--dim);
     border-top:1px solid var(--line); white-space:pre-wrap;
   }
-  #log .ok { color:var(--hot); }
-  #log .err { color:var(--bad); }
+  #log .ok { color:var(--live); }
+  #log .err { color:var(--hit); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pane.hit-flash { animation: hitFlash 300ms ease-out; }
+    .bug .bdot, .plate .dot.live { animation:none; }
+  }
 </style>
 </head>
 <body>
 <header>
   <div class="brand">SHADOW<em>BOX</em></div>
-  <div class="badge">LIVE BROADCAST</div>
+  <div class="bug"><span class="bdot"></span>LIVE</div>
   <div class="spacer"></div>
   <span class="hint">Hit cues: <kbd>1</kbd> A lands · <kbd>2</kbd> B lands · <kbd>r</kbd> reset</span>
 </header>
@@ -116,12 +164,13 @@
     <!-- muted: fighter streams may carry robot-voice audio; it must never play in the venue
          (feedback). Audio is routed only into the broadcast recording mix. -->
     <video id="video-A" autoplay muted playsinline></video>
-    <div class="plate"><span class="dot" id="dot-A"></span>Fighter A <span class="state" id="state-A">waiting…</span></div>
+    <div class="plate"><span class="dot" id="dot-A"></span><span class="name">Fighter A</span><span class="state" id="state-A">waiting…</span></div>
   </div>
   <div class="pane" data-fighter="B">
     <video id="video-B" autoplay muted playsinline></video>
-    <div class="plate"><span class="dot" id="dot-B"></span>Fighter B <span class="state" id="state-B">waiting…</span></div>
+    <div class="plate"><span class="dot" id="dot-B"></span><span class="name">Fighter B</span><span class="state" id="state-B">waiting…</span></div>
   </div>
+  <div class="seam"></div>
   <div class="vs">VS</div>
 </div>
 
@@ -152,7 +201,9 @@
   // frame-level merging happens anywhere.
   const peers = {};   // fighterId -> RTCPeerConnection
   const streams = {}; // fighterId -> MediaStream (for the recording compositor)
-  const relayWs = new WebSocket(location.origin.replace(/^http/, 'ws') + '/relay');
+  // Netlify (or any static host) can't serve the WebSocket relay — pass
+  // ?relay=wss://<host>/relay to point at the laptop running `npm start`.
+  const relayWs = new WebSocket(new URLSearchParams(location.search).get('relay') || location.origin.replace(/^http/, 'ws') + '/relay');
 
   function peerFor(fighterId) {
     if (peers[fighterId]) return peers[fighterId];
