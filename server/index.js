@@ -15,6 +15,16 @@ const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
 
 app.use(express.static(path.join(__dirname, '../public')));
 
+// The Netlify mirror serves the same pages from a different origin and calls our /token
+// and /references — allow that cross-origin (POST /token preflights because of the
+// x-shadowbox-key header). The WebSocket relay is exempt from CORS by design.
+app.use((req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, x-shadowbox-key');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // Exchange our server-side REACTOR_API_KEY for a short-lived, session-scoped JWT.
 // Shape confirmed against https://docs.reactor.inc/quickstart on 2026-08-23:
 //   POST https://api.reactor.inc/tokens

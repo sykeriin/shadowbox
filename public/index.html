@@ -263,13 +263,36 @@
   }
   let activePrompts = buildPrompts('none'); // rebuilt at Start from the arena select
 
-  // Fighter id keys this session's feed on the broadcast page.
-  const fighter = new URLSearchParams(location.search).get('fighter') || 'A';
+  // Static mirrors (Netlify) have no backend of their own — token exchange, gallery list,
+  // and the relay all live on the Render deployment. Everywhere else (local npm start,
+  // Render itself) the backend is same-origin.
+  const BACKEND = location.hostname.endsWith('.netlify.app')
+    ? 'https://shadowbox-p8bq.onrender.com'
+    : location.origin;
+
+  // Fighter id keys this session's feed on the broadcast page. No ?fighter= in the URL?
+  // Ask, then reload with the choice in the URL (preserving ?key= etc.) so a refresh sticks.
+  const fighterParam = new URLSearchParams(location.search).get('fighter');
+  const fighter = fighterParam || 'A';
   document.title = 'Shadowbox — Fighter ' + fighter;
   document.getElementById('fighterBadge').textContent = 'FIGHTER ' + fighter;
   document.body.dataset.fighter = fighter; // corner color (blue corner A / red corner B)
-  if (!new URLSearchParams(location.search).get('fighter')) {
-    log('No ?fighter= in URL — defaulting to Fighter A. Open the second session as ?fighter=B.', 'err');
+  if (!fighterParam) {
+    const pick = document.createElement('div');
+    pick.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(5,7,12,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;';
+    pick.innerHTML = '<div style="font-size:22px;letter-spacing:2px;">WHICH CORNER ARE YOU?</div>' +
+      '<div style="display:flex;gap:20px;">' +
+      '<button data-pick="A" style="font-size:20px;padding:22px 40px;cursor:pointer;background:#12305c;color:#cfe3ff;border:2px solid #2d67c9;border-radius:10px;">PLAYER A<br><small>blue corner</small></button>' +
+      '<button data-pick="B" style="font-size:20px;padding:22px 40px;cursor:pointer;background:#5c1212;color:#ffd6d6;border:2px solid #c92d2d;border-radius:10px;">PLAYER B<br><small>red corner</small></button>' +
+      '</div>';
+    pick.addEventListener('click', (e) => {
+      const choice = e.target.closest('button')?.dataset.pick;
+      if (!choice) return;
+      const params = new URLSearchParams(location.search);
+      params.set('fighter', choice);
+      location.search = params;
+    });
+    document.body.appendChild(pick);
   }
 
   // Default reference per fighter; a dropped image overrides it (still exactly ONE reference
@@ -298,7 +321,7 @@
   // Gallery of images already in public/ — clicking one selects it exactly like a dropped
   // file (still exactly ONE reference per session, applied on next Start).
   const gallery = document.getElementById('gallery');
-  fetch('/references').then(r => r.json()).then(files => {
+  fetch(BACKEND + '/references').then(r => r.json()).then(files => {
     for (const name of files) {
       const img = document.createElement('img');
       img.src = '/' + name;
@@ -369,7 +392,7 @@
   // before a session starts; WebRTC signaling rides the same socket once publishing begins.
   // Netlify (or any static host) can't serve the WebSocket relay — pass
   // ?relay=wss://<host>/relay to point at the laptop running `npm start`.
-  const relayWs = new WebSocket(new URLSearchParams(location.search).get('relay') || location.origin.replace(/^http/, 'ws') + '/relay');
+  const relayWs = new WebSocket(new URLSearchParams(location.search).get('relay') || BACKEND.replace(/^http/, 'ws') + '/relay');
   const relayReady = new Promise((resolve) => relayWs.addEventListener('open', resolve));
   relayWs.addEventListener('error', () => log('Relay connection failed (non-fatal — local view still works).', 'err'));
   relayWs.addEventListener('message', async (ev) => {
@@ -448,7 +471,7 @@
     log('Requesting JWT from /token…');
     // Hosted deployments guard /token with a shared secret (TOKEN_SECRET on the server) —
     // fighters carry it in the page URL as ?key=... . Absent locally, absent header, no harm.
-    const tokenRes = await fetch('/token', {
+    const tokenRes = await fetch(BACKEND + '/token', {
       method: 'POST',
       headers: { 'x-shadowbox-key': new URLSearchParams(location.search).get('key') || '' },
     });

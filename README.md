@@ -101,7 +101,12 @@ self-signed-cert dance disappears; every laptop just opens the real HTTPS URL:
 | Broadcast | `https://<app>.onrender.com/broadcast.html` |
 
 The free plan spins down after ~15 min idle and takes ~1 min to cold-start — open the URL a
-few minutes before showtime. Fighters on different home networks may also need a TURN server
+few minutes before showtime.
+
+There's also a static mirror of the pages on Netlify (`shadowbox-arena.netlify.app`) —
+same URLs and `?key=` rules. The pages detect the netlify.app hostname and route token,
+gallery, and relay traffic to the Render backend, so Render must be awake for the mirror
+to work. Opening a fighter page with no `?fighter=` shows a Player A / Player B picker. Fighters on different home networks may also need a TURN server
 for the WebRTC feeds (STUN alone often fails across NATs); same-LAN fighters are fine.
 
 ## ⚠️ Before you get creative
